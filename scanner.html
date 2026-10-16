@@ -85,7 +85,7 @@
     qrTextEl.textContent=lastDecodedText;
     resultEl.style.display='block';copyButton.disabled=!lastDecodedText;rescanButton.disabled=false;
     if(!token){setStatus('A QR code was read, but it does not contain a recognized CSWDO workflow token or receipt URL.','error');return;}
-    deliverToken(token);
+    deliverToken(token, lastDecodedText);
   }
   async function onScanSuccess(decodedText){
     if(busy)return;
@@ -95,7 +95,7 @@
     await stopCamera(false);
     showResult(decodedText,token);
   }
-  function deliverToken(token){
+  function deliverToken(token, decodedText){
     // Desktop popup path: send the token to the Staff Portal.
     if(window.opener && !window.opener.closed){
       let targetOrigin;
@@ -109,14 +109,29 @@
     // Mobile browsers often open GitHub Pages in a standalone tab and remove window.opener.
     // Return to the original Staff Portal URL with the token; the portal handles the lookup.
     try{
-      if(!returnUrl) throw new Error('Missing return URL');
-      const back=new URL(returnUrl);
-      if(back.protocol!=='https:' || !/script\.google\.com$/.test(back.hostname)) throw new Error('Invalid return URL');
+      // Preferred mobile path: return to the Staff Portal URL supplied by the launcher.
+      let back = null;
+      if(returnUrl){
+        back = new URL(returnUrl);
+      } else {
+        // Fallback: many CSWDO receipts encode the Apps Script Staff Portal URL itself.
+        // Reuse that trusted URL so a mobile tab opened directly from the QR can return.
+        const scannedUrl = new URL(String(decodedText || ''));
+        if(scannedUrl.protocol === 'https:' && /(^|\.)script\.google\.com$/i.test(scannedUrl.hostname) && scannedUrl.searchParams.get('page') === 'staff') {
+          back = scannedUrl;
+        }
+      }
+      if(!back) throw new Error('Missing return URL and no Staff Portal URL in QR');
+      if(back.protocol!=='https:' || !/(^|\.)script\.google\.com$/i.test(back.hostname)) throw new Error('Invalid return URL');
+      // Ensure this is the Staff Portal and hand the token to its existing handler.
+      back.searchParams.set('page','staff');
       back.searchParams.set('scannedQr',token);
-      setStatus('QR code read. Returning to the Staff Portal…','ok');
+      back.searchParams.delete('qr');
+      back.searchParams.delete('token');
+      setStatus('QR code read. Opening the Staff Portal with the scanned token…','ok');
       window.location.replace(back.toString());
     }catch(e){
-      setStatus('QR code read, but automatic return is unavailable. Go back to the Staff Portal and use the Search box with the client number or reference number.','error');
+      setStatus('QR code read, but automatic return is unavailable. Return to the Staff Portal and use the Search box with the client number or reference number.','error');
       busy=false;
     }
   }
