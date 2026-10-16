@@ -54,6 +54,7 @@
   const rescanButton=document.getElementById('rescanButton');
   const params=new URLSearchParams(window.location.search);
   const returnOrigin=params.get('returnOrigin')||'';
+  const returnUrl=params.get('returnUrl')||'';
   let scanner=null, scannerRunning=false, lastDecodedText='', busy=false;
 
   function setStatus(message,kind){statusEl.textContent=message;statusEl.className=kind||'';}
@@ -95,16 +96,29 @@
     showResult(decodedText,token);
   }
   function deliverToken(token){
-    if(!window.opener||window.opener.closed){
-      setStatus('QR token read, but the Staff Portal window is not available. Reopen this scanner from the Staff Portal and scan again.','error');busy=false;return;
+    // Desktop popup path: send the token to the Staff Portal.
+    if(window.opener && !window.opener.closed){
+      let targetOrigin;
+      try{targetOrigin=new URL(returnOrigin);if(targetOrigin.protocol!=='https:')throw new Error('HTTPS required');}
+      catch(e){setStatus('The return address is missing or invalid. Reopen the scanner from the Staff Portal.','error');busy=false;return;}
+      window.opener.postMessage({type:'CSWDO_QR_SCANNED',value:token},targetOrigin.origin);
+      setStatus('QR token sent to the Staff Portal. The client record will open if your account is authorized.','ok');
+      setTimeout(()=>{try{window.close();}catch(e){}},900);
+      return;
     }
-    let targetOrigin;
-    try{targetOrigin=new URL(returnOrigin);if(targetOrigin.protocol!=='https:')throw new Error('HTTPS required');}
-    catch(e){setStatus('The return address is missing or invalid. Close this tab and reopen the scanner from the Staff Portal.','error');busy=false;return;}
-    // The parent Staff Portal validates event.origin and then calls its existing server-side lookup.
-    window.opener.postMessage({type:'CSWDO_QR_SCANNED',value:token},targetOrigin.origin);
-    setStatus('QR token sent to the Staff Portal. The client record will open if your account is authorized.','ok');
-    setTimeout(()=>{try{window.close();}catch(e){}},900);
+    // Mobile browsers often open GitHub Pages in a standalone tab and remove window.opener.
+    // Return to the original Staff Portal URL with the token; the portal handles the lookup.
+    try{
+      if(!returnUrl) throw new Error('Missing return URL');
+      const back=new URL(returnUrl);
+      if(back.protocol!=='https:' || !/script\.google\.com$/.test(back.hostname)) throw new Error('Invalid return URL');
+      back.searchParams.set('scannedQr',token);
+      setStatus('QR code read. Returning to the Staff Portal…','ok');
+      window.location.replace(back.toString());
+    }catch(e){
+      setStatus('QR code read, but automatic return is unavailable. Go back to the Staff Portal and use the Search box with the client number or reference number.','error');
+      busy=false;
+    }
   }
   async function startCamera(){
     if(busy){busy=false;}
@@ -136,7 +150,7 @@
   rescanButton.addEventListener('click',()=>{busy=false;resultEl.style.display='none';lastDecodedText='';copyButton.disabled=true;rescanButton.disabled=true;startCamera();});
   document.getElementById('backButton').addEventListener('click',()=>{stopCamera(false);if(window.opener){window.close();}else if(history.length>1){history.back();}else{setStatus('Close this tab to return to the Staff Portal.');}});
   window.addEventListener('pagehide',()=>{if(scanner&&scannerRunning){scanner.stop().catch(()=>{});}});
-  if(!window.opener){setStatus('Open this scanner using the SCAN CLIENT QR CODE button inside the CSWDO Staff Portal.','error');}
+  if(!window.opener && !returnUrl){setStatus('Open this scanner from the Staff Portal so the scanned result can return automatically.','error');}
 })();
 </script>
 </body>
