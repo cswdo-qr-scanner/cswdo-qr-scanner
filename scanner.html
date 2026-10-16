@@ -1,78 +1,142 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#193d64">
-<title>CSWDO Client QR Scanner</title>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<style>
-:root{--navy:#193d64;--green:#168653;--page:#eef3f8;--border:#d4deea;--text:#173b63}
-*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--text);font-family:Arial,Helvetica,sans-serif}
-header{background:var(--navy);color:#fff;padding:20px 16px;text-align:center}header h1{margin:0 0 6px;font-size:clamp(20px,4vw,27px)}header p{margin:0;font-size:13px;opacity:.9}
-main{width:min(100% - 28px,600px);margin:24px auto;padding:22px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 5px 20px #163a5c12}
-h2{margin:0 0 10px;text-align:center;font-size:21px}.intro{line-height:1.5;font-size:14px}
-#reader{width:100%;min-height:80px;margin:18px auto 12px;overflow:hidden;border-radius:8px}
-#status{margin:14px 0;padding:12px;border:1px solid #f0d27b;border-radius:7px;background:#fff7df;color:#664d03;font-size:13px;line-height:1.45;overflow-wrap:anywhere}
-#status.ok{border-color:#8dd6a4;background:#e8f7ed;color:#155b31}#status.error{border-color:#f0a5ac;background:#fff0f1;color:#8c1d2a}
-.result{display:none;padding:14px;border:1px solid #8dd6a4;border-radius:8px;background:#e8f7ed;overflow-wrap:anywhere}.result strong{display:block;margin-bottom:8px}
-#qrText{margin:0 0 12px;white-space:pre-wrap;word-break:break-word}
-.buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px}button{min-height:44px;border:0;border-radius:7px;padding:12px 14px;font-size:14px;font-weight:700;cursor:pointer;color:white;background:var(--navy)}
-button:disabled{opacity:.55;cursor:wait}.green{background:var(--green)}.gray{background:#777}.full{width:100%;margin-top:10px}
-.note{margin-top:18px;color:#53677d;font-size:12px;line-height:1.5}footer{text-align:center;color:#64748b;font-size:12px;padding:10px 16px 28px}
-@media(max-width:420px){main{padding:16px}.buttons{grid-template-columns:1fr}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#193d64">
+  <title>CSWDO Client QR Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root{font-family:Arial,Helvetica,sans-serif;color:#17365d;background:#eef3f8}
+    *{box-sizing:border-box}body{margin:0;padding:16px}
+    header{background:#193d64;color:#fff;padding:18px 16px;text-align:center;border-radius:12px}
+    header h1{font-size:clamp(20px,4vw,27px);margin:0 0 6px}header p{margin:0;font-size:13px;opacity:.92}
+    main{width:min(100%,620px);margin:18px auto;background:#fff;border:1px solid #d4deea;border-radius:12px;padding:18px;box-shadow:0 5px 20px #163a5c12}
+    h2{margin:0 0 10px;font-size:21px}.intro{font-size:14px;line-height:1.5;color:#43556b}
+    #reader{width:100%;min-height:80px;margin:18px auto 12px;overflow:hidden;border-radius:8px}
+    #status{margin:14px 0;padding:12px;border:1px solid #f0d27b;border-radius:8px;background:#fff7df;color:#664d03;font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+    #status.ok{border-color:#8dd6a4;background:#e8f7ed;color:#155b31}#status.error{border-color:#f0a5ac;background:#fff0f1;color:#8c1d2a}
+    .result{display:none;padding:14px;border:1px solid #8dd6a4;border-radius:8px;background:#e8f7ed;overflow-wrap:anywhere}.result strong{display:block;margin-bottom:8px}
+    #qrText{font-size:12px;white-space:pre-wrap;word-break:break-word}
+    .buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+    button{min-height:44px;border:0;border-radius:7px;padding:12px 14px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;background:#193d64}
+    button.green{background:#168653}button.gray{background:#777}button:disabled{opacity:.55;cursor:wait}.full{width:100%;margin-top:10px}
+    .note{margin-top:18px;color:#53677d;font-size:12px;line-height:1.5}footer{text-align:center;color:#64748b;font-size:12px;padding:10px}
+    @media(max-width:420px){main{padding:14px}.buttons{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
 <header><h1>CSWDO Client QR Scanner</h1><p>City Social Welfare and Development Office</p></header>
 <main>
-<h2>Scan Client Receipt</h2>
-<p class="intro">Allow camera access, then hold the QR code on the client's CSWDO receipt inside the scanning frame. You can also select a saved QR image if live camera access is unavailable.</p>
-<div id="reader" aria-label="QR code camera preview"></div>
-<div id="status" role="status" aria-live="polite">Ready. Select START CAMERA to begin.</div>
-<section id="result" class="result" aria-live="polite"><strong>QR code detected</strong><p id="qrText"></p><div class="buttons"><button id="copyButton" type="button" class="green">COPY SCANNED TEXT</button><button id="rescanButton" type="button">SCAN ANOTHER QR</button></div></section>
-<div class="buttons" style="margin-top:12px"><button id="startButton" type="button" class="green">START CAMERA</button><button id="stopButton" type="button" class="gray">STOP CAMERA</button></div>
-<button id="photoButton" type="button" class="full">SCAN QR FROM PHOTO</button><input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
-<button id="backButton" type="button" class="gray full">BACK</button>
-<p class="note">Privacy note: this page displays the decoded QR content in your browser. It does not submit the content to a database. To search a client record automatically, the scanner must be connected to the authorized CSWDO Staff Portal.</p>
-</main><footer>CSWDO Online Services</footer>
+  <h2>Scan Client Receipt</h2>
+  <p class="intro">Allow camera access, then hold the QR code on the client's CSWDO receipt inside the scanning frame. If camera access is unavailable, you can select a saved QR image.</p>
+  <div id="reader" aria-label="QR code camera preview"></div>
+  <div id="status" role="status" aria-live="polite">Ready. Select START CAMERA to begin.</div>
+  <section id="result" class="result" aria-live="polite"><strong>QR code detected</strong><p id="qrText"></p></section>
+  <div class="buttons"><button id="startButton" class="green" type="button">START CAMERA</button><button id="stopButton" class="gray" type="button" disabled>STOP CAMERA</button></div>
+  <button id="photoButton" class="full" type="button">SCAN QR FROM PHOTO</button>
+  <input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
+  <div class="buttons"><button id="copyButton" class="gray" type="button" disabled>COPY SCANNED TEXT</button><button id="rescanButton" class="gray" type="button" disabled>SCAN ANOTHER QR</button></div>
+  <button id="backButton" class="gray full" type="button">BACK</button>
+  <p class="note">The scanner does not write to the database. It sends the extracted QR token to the Staff Portal that opened this window. The existing Staff Portal and server-side permission checks determine whether the client record can be opened.</p>
+</main>
+<footer>CSWDO Online Services</footer>
 <script>
 (function(){
-"use strict";
-const statusEl=document.getElementById("status"),resultEl=document.getElementById("result"),qrTextEl=document.getElementById("qrText"),startButton=document.getElementById("startButton"),photoInput=document.getElementById("photoInput");
-let scanner=null,scannerRunning=false,starting=false,lastDecodedText="";
-function setStatus(message,type){statusEl.className=type||"";statusEl.textContent=message}
-function showResult(text){lastDecodedText=String(text||"").trim();qrTextEl.textContent=lastDecodedText||"(QR code was empty)";resultEl.style.display="block";setStatus("QR code scanned successfully.","ok")}
-function ensureLibrary(){if(!window.Html5Qrcode){setStatus("The QR scanner library did not load. Check your internet connection, reload this page, and try again.","error");return false}return true}
-async function stopCamera(silent){if(scanner&&scannerRunning){try{await scanner.stop()}catch(err){if(!silent)console.warn(err)}}scannerRunning=false;starting=false;startButton.disabled=false;if(!silent)setStatus("Camera stopped.")}
-async function startCamera(){
- if(starting||scannerRunning)return;if(!ensureLibrary())return;starting=true;startButton.disabled=true;resultEl.style.display="none";lastDecodedText="";setStatus("Requesting camera permission...");
- try{
-  if(!window.isSecureContext)throw new Error("Open this page using the HTTPS GitHub Pages address.");
-  if(!scanner)scanner=new Html5Qrcode("reader");
-  let cameras=[];try{cameras=await Html5Qrcode.getCameras()}catch(e){}
-  const preferred=cameras.find(c=>/back|rear|environment/i.test(c.label||""));
-  const cameraConfig=preferred?{deviceId:{exact:preferred.id}}:{facingMode:"environment"};
-  await scanner.start(cameraConfig,{fps:10,qrbox:function(w,h){const s=Math.floor(Math.min(w,h,280)*.8);return{width:Math.max(160,s),height:Math.max(160,s)}},aspectRatio:1,rememberLastUsedCamera:true},
-   async function(decodedText){if(!decodedText||decodedText===lastDecodedText)return;showResult(decodedText);await stopCamera(true)},function(){});
-  scannerRunning=true;starting=false;startButton.disabled=false;setStatus("Camera is active. Place the client's QR code inside the frame.");
- }catch(err){
-  scannerRunning=false;starting=false;startButton.disabled=false;let msg=err&&err.message?err.message:String(err);
-  if(err&&(err.name==="NotAllowedError"||/permission|denied|NotAllowedError/i.test(msg)))msg="Camera access was denied. In Chrome, open site settings for this GitHub Pages site, set Camera to Allow, reload, then try again.";
-  else if(err&&(err.name==="NotFoundError"||/No camera/i.test(msg)))msg="No camera was found. Connect or enable a camera and try again.";
-  else if(err&&err.name==="NotReadableError")msg="The camera may be in use by another app or browser tab. Close other camera apps and try again.";
-  setStatus("Unable to start the camera: "+msg,"error");
- }
-}
-async function scanPhoto(file){if(!file||!ensureLibrary())return;await stopCamera(true);resultEl.style.display="none";setStatus("Reading QR code from image...");try{if(!scanner)scanner=new Html5Qrcode("reader");showResult(await scanner.scanFile(file,true))}catch(e){setStatus("Could not read a QR code from that image. Try a clearer image with the full QR code visible.","error")}}
-startButton.addEventListener("click",startCamera);
-document.getElementById("stopButton").addEventListener("click",()=>stopCamera(false));
-document.getElementById("photoButton").addEventListener("click",()=>photoInput.click());
-photoInput.addEventListener("change",()=>{scanPhoto(photoInput.files&&photoInput.files[0]);photoInput.value=""});
-document.getElementById("copyButton").addEventListener("click",async()=>{if(!lastDecodedText)return;try{await navigator.clipboard.writeText(lastDecodedText);setStatus("Scanned text copied to clipboard.","ok")}catch(e){setStatus("Clipboard access was blocked. Select and copy the displayed text manually.","error")}});
-document.getElementById("rescanButton").addEventListener("click",()=>{resultEl.style.display="none";lastDecodedText="";startCamera()});
-document.getElementById("backButton").addEventListener("click",()=>{try{if(document.referrer&&new URL(document.referrer).origin===location.origin){history.back();return}}catch(e){}location.href="./"});
-window.addEventListener("pagehide",()=>{if(scanner&&scannerRunning)scanner.stop().catch(()=>{})});
+  'use strict';
+  const statusEl=document.getElementById('status');
+  const resultEl=document.getElementById('result');
+  const qrTextEl=document.getElementById('qrText');
+  const startButton=document.getElementById('startButton');
+  const stopButton=document.getElementById('stopButton');
+  const photoInput=document.getElementById('photoInput');
+  const copyButton=document.getElementById('copyButton');
+  const rescanButton=document.getElementById('rescanButton');
+  const params=new URLSearchParams(window.location.search);
+  const returnOrigin=params.get('returnOrigin')||'';
+  let scanner=null, scannerRunning=false, lastDecodedText='', busy=false;
+
+  function setStatus(message,kind){statusEl.textContent=message;statusEl.className=kind||'';}
+  function extractToken(raw){
+    const text=String(raw||'').trim();
+    if(!text)return '';
+    // Receipt QR codes may contain a full Apps Script URL such as ?page=staff&qr=<token>.
+    try{
+      const url=new URL(text);
+      const token=url.searchParams.get('qr')||url.searchParams.get('token');
+      if(token && /^[A-Za-z0-9._-]{4,256}$/.test(token.trim()))return token.trim();
+    }catch(e){}
+    // Also accept a bare token; do not pass arbitrary URLs or free text to the record lookup.
+    if(/^[A-Za-z0-9._-]{4,256}$/.test(text))return text;
+    return '';
+  }
+  async function stopCamera(updateMessage){
+    if(scanner && scannerRunning){
+      try{await scanner.stop();}catch(e){}
+      try{await scanner.clear();}catch(e){}
+    }
+    scannerRunning=false;
+    startButton.disabled=false;stopButton.disabled=true;
+    if(updateMessage)setStatus('Camera stopped.');
+  }
+  function showResult(raw,token){
+    lastDecodedText=String(raw||'');
+    qrTextEl.textContent=lastDecodedText;
+    resultEl.style.display='block';copyButton.disabled=!lastDecodedText;rescanButton.disabled=false;
+    if(!token){setStatus('A QR code was read, but it does not contain a recognized CSWDO workflow token or receipt URL.','error');return;}
+    deliverToken(token);
+  }
+  async function onScanSuccess(decodedText){
+    if(busy)return;
+    const token=extractToken(decodedText);
+    if(!token){showResult(decodedText,'');return;}
+    busy=true;
+    await stopCamera(false);
+    showResult(decodedText,token);
+  }
+  function deliverToken(token){
+    if(!window.opener||window.opener.closed){
+      setStatus('QR token read, but the Staff Portal window is not available. Reopen this scanner from the Staff Portal and scan again.','error');busy=false;return;
+    }
+    let targetOrigin;
+    try{targetOrigin=new URL(returnOrigin);if(targetOrigin.protocol!=='https:')throw new Error('HTTPS required');}
+    catch(e){setStatus('The return address is missing or invalid. Close this tab and reopen the scanner from the Staff Portal.','error');busy=false;return;}
+    // The parent Staff Portal validates event.origin and then calls its existing server-side lookup.
+    window.opener.postMessage({type:'CSWDO_QR_SCANNED',value:token},targetOrigin.origin);
+    setStatus('QR token sent to the Staff Portal. The client record will open if your account is authorized.','ok');
+    setTimeout(()=>{try{window.close();}catch(e){}},900);
+  }
+  async function startCamera(){
+    if(busy){busy=false;}
+    resultEl.style.display='none';lastDecodedText='';copyButton.disabled=true;rescanButton.disabled=true;
+    if(!window.isSecureContext){setStatus('Open this page through the HTTPS GitHub Pages address.','error');return;}
+    if(typeof Html5Qrcode==='undefined'){setStatus('QR scanner library did not load. Check your internet connection and reload.','error');return;}
+    startButton.disabled=true;setStatus('Requesting camera permission… Allow camera access when prompted.');
+    try{
+      if(!scanner)scanner=new Html5Qrcode('reader',{verbose:false});
+      await scanner.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>{const size=Math.floor(Math.min(w,h)*0.75);return {width:size,height:size};}},onScanSuccess,()=>{});
+      scannerRunning=true;stopButton.disabled=false;setStatus('Camera is live. Hold the receipt QR code inside the frame.');
+    }catch(e){scannerRunning=false;startButton.disabled=false;stopButton.disabled=true;setStatus('Unable to start camera: '+(e&&e.message?e.message:'camera permission may be blocked. Allow camera access in Chrome site settings and retry.'),'error');}
+  }
+  async function scanPhoto(file){
+    if(!file)return;
+    if(typeof Html5Qrcode==='undefined'){setStatus('QR scanner library did not load.','error');return;}
+    await stopCamera(false);busy=false;setStatus('Reading QR code from image…');
+    try{
+      if(!scanner)scanner=new Html5Qrcode('reader',{verbose:false});
+      const decoded=await scanner.scanFile(file,true);
+      await onScanSuccess(decoded);
+    }catch(e){setStatus('Could not read a QR code from that image. Try a clearer photo.','error');}
+  }
+  startButton.addEventListener('click',startCamera);
+  stopButton.addEventListener('click',()=>stopCamera(true));
+  document.getElementById('photoButton').addEventListener('click',()=>photoInput.click());
+  photoInput.addEventListener('change',()=>{const file=photoInput.files&&photoInput.files[0];if(file)scanPhoto(file);photoInput.value='';});
+  copyButton.addEventListener('click',async()=>{if(!lastDecodedText)return;try{await navigator.clipboard.writeText(lastDecodedText);setStatus('Scanned text copied to clipboard.','ok');}catch(e){setStatus('Clipboard access was blocked. Select and copy the displayed text manually.','error');}});
+  rescanButton.addEventListener('click',()=>{busy=false;resultEl.style.display='none';lastDecodedText='';copyButton.disabled=true;rescanButton.disabled=true;startCamera();});
+  document.getElementById('backButton').addEventListener('click',()=>{stopCamera(false);if(window.opener){window.close();}else if(history.length>1){history.back();}else{setStatus('Close this tab to return to the Staff Portal.');}});
+  window.addEventListener('pagehide',()=>{if(scanner&&scannerRunning){scanner.stop().catch(()=>{});}});
+  if(!window.opener){setStatus('Open this scanner using the SCAN CLIENT QR CODE button inside the CSWDO Staff Portal.','error');}
 })();
 </script>
 </body>
