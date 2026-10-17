@@ -84,7 +84,7 @@ function returnToStaffPortal(text){
  try{
   const destination=new URL(returnUrl);
   const hostAllowed=/^(script\.google\.com|script\.googleusercontent\.com)$/i.test(destination.hostname);
-  const isAppsScriptExec=/\/macros\/s\/[^/]+\/exec\/?$/i.test(destination.pathname);
+  const isAppsScriptExec=/\/(?:a\/[^/]+\/)?macros\/s\/[^/]+\/exec\/?$/i.test(destination.pathname);
   // Accept the official deployed /exec URL; tolerate a Google Apps Script wrapper URL
   // when the browser has opened the app through its Google-hosted frame.
   const isGoogleScriptWrapper=/^script\.googleusercontent\.com$/i.test(destination.hostname) && destination.pathname.length>1;
