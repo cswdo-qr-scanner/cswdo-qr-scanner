@@ -46,7 +46,18 @@ const statusEl=document.getElementById('status'),resultEl=document.getElementByI
 let scanner=null,scannerRunning=false,starting=false,lastDecodedText='';
 function setStatus(message,type){statusEl.className=type||'';statusEl.textContent=message;}
 function isAllowedPortalUrl(value){
- try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='script.google.com'&&/\/macros\/s\//.test(u.pathname)&&/\/exec\/?$/.test(u.pathname);}catch(e){return false;}
+ try{
+  const u=new URL(value);
+  return u.protocol==='https:' && u.hostname==='script.google.com' &&
+   /\/a\/[^/]+\/macros\/s\/[^/]+\/exec\/?$/.test(u.pathname) ||
+   (u.protocol==='https:' && u.hostname==='script.google.com' && /\/macros\/s\/[^/]+\/exec\/?$/.test(u.pathname));
+ }catch(e){return false;}
+}
+function isAllowedReturnOrigin(value){
+ try{
+  const u=new URL(value);
+  return u.protocol==='https:' && (u.hostname==='script.google.com' || u.hostname.endsWith('.googleusercontent.com')) && u.origin===value.replace(/\/$/,'');
+ }catch(e){return false;}
 }
 function extractWorkflowToken(raw){
  const value=String(raw||'').trim();
@@ -59,20 +70,21 @@ function returnToStaffPortal(rawText){
  const token=extractWorkflowToken(value);
  if(!token){setStatus('QR was decoded, but it does not contain a valid CSWDO workflow token. Check the receipt QR code.','error');return false;}
  // Desktop: return the full decoded QR to the original portal. The portal extracts the token and performs its existing authorized lookup.
- if(window.opener&&!window.opener.closed&&returnOrigin){
+ // Validate the fallback URL before attempting either return method.
+ if(!returnUrl){setStatus('QR read, but no Staff Portal return URL was supplied. Return to the signed-in Staff Portal and open the scanner using SCAN CLIENT QR CODE.','error');return false;}
+ if(!isAllowedPortalUrl(returnUrl)){setStatus('Staff Portal return address is invalid. The scanner needs the canonical HTTPS Apps Script /macros/s/.../exec URL. Replace the scanner.html file on GitHub Pages and reopen the scanner from the signed-in Staff Portal.','error');return false;}
+ // Desktop: post the result to the actual opener/frame origin. Apps Script may use
+ // script.googleusercontent.com for the HTML Service frame, not only script.google.com.
+ if(window.opener&&!window.opener.closed&&isAllowedReturnOrigin(returnOrigin)){
   try{
-   const originUrl=new URL(returnOrigin);
-   if(originUrl.protocol==='https:'&&originUrl.hostname==='script.google.com'){
-    window.opener.postMessage({type:'CSWDO_QR_SCANNED',value:value},originUrl.origin);
-    setStatus('QR scanned. Sent to the original Staff Portal. You can close this scanner window if it remains open.','ok');
-    window.setTimeout(()=>{try{window.close()}catch(e){}},350);
-    return true;
-   }
+   window.opener.postMessage({type:'CSWDO_QR_SCANNED',value:value},new URL(returnOrigin).origin);
+   setStatus('QR scanned. Sent to the original Staff Portal.','ok');
+   window.setTimeout(()=>{try{window.close()}catch(e){}},350);
+   return true;
   }catch(e){}
  }
- // Mobile / popup-opener fallback. Keep the supplied URL, including its signed-in session, and use the exact parameter handled by index.html.
- if(!returnUrl){setStatus('QR read, but no Staff Portal return URL was supplied. Return to the signed-in Staff Portal and open the scanner using SCAN CLIENT QR CODE.','error');return false;}
- if(!isAllowedPortalUrl(returnUrl)){setStatus('Return URL validation failed. Reopen the scanner from the signed-in Staff Portal. Check that index.html passes the full HTTPS Apps Script /macros/s/.../exec URL as returnUrl.','error');return false;}
+ // Mobile / popup-opener fallback. Return to the canonical /exec URL with the session and scanned token.
+
  try{
   const dest=new URL(returnUrl);
   dest.searchParams.set('page','staff');
