@@ -70,11 +70,9 @@ function returnToStaffPortal(rawText){
  const token=extractWorkflowToken(value);
  if(!token){setStatus('QR was decoded, but it does not contain a valid CSWDO workflow token. Check the receipt QR code.','error');return false;}
  // Desktop: return the full decoded QR to the original portal. The portal extracts the token and performs its existing authorized lookup.
- // Validate the fallback URL before attempting either return method.
- if(!returnUrl){setStatus('QR read, but no Staff Portal return URL was supplied. Return to the signed-in Staff Portal and open the scanner using SCAN CLIENT QR CODE.','error');return false;}
- if(!isAllowedPortalUrl(returnUrl)){setStatus('Staff Portal return address is invalid. The scanner needs the canonical HTTPS Apps Script /macros/s/.../exec URL. Replace the scanner.html file on GitHub Pages and reopen the scanner from the signed-in Staff Portal.','error');return false;}
- // Desktop: post the result to the actual opener/frame origin. Apps Script may use
- // script.googleusercontent.com for the HTML Service frame, not only script.google.com.
+ // Desktop: prefer sending the decoded value to the original Staff Portal window.
+ // This route does not need returnUrl; validating it first caused desktop scans to fail
+ // whenever an older Staff Portal deployment omitted that parameter.
  if(window.opener&&!window.opener.closed&&isAllowedReturnOrigin(returnOrigin)){
   try{
    window.opener.postMessage({type:'CSWDO_QR_SCANNED',value:value},new URL(returnOrigin).origin);
@@ -83,8 +81,9 @@ function returnToStaffPortal(rawText){
    return true;
   }catch(e){}
  }
- // Mobile / popup-opener fallback. Return to the canonical /exec URL with the session and scanned token.
-
+ // Mobile / fallback requires a canonical /exec URL that contains the signed-in session.
+ if(!returnUrl){setStatus('QR read, but no Staff Portal return URL was supplied. Update index.html in Apps Script, deploy a new version, and reopen the scanner from the signed-in Staff Portal.','error');return false;}
+ if(!isAllowedPortalUrl(returnUrl)){setStatus('Staff Portal return address is invalid. Update index.html in Apps Script so it passes the canonical HTTPS Apps Script /macros/s/.../exec URL, then deploy a new version.','error');return false;}
  try{
   const dest=new URL(returnUrl);
   dest.searchParams.set('page','staff');
