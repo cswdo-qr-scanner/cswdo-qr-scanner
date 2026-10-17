@@ -55,52 +55,68 @@ function extractWorkflowToken(raw){
  if(/^[a-f0-9-]{24,128}$/i.test(value))return value;
  return "";
 }
+function isTrustedPortalUrl(value){
+ try{
+  const u=new URL(value);
+  return u.protocol==="https:" && /(^|\.)script\.google\.com$/i.test(u.hostname) &&
+    /\/macros\/s\//i.test(u.pathname) && /\/exec\/?$/i.test(u.pathname);
+ }catch(e){return false;}
+}
+function getPortalDestination(scannedText){
+ // Prefer the return URL supplied by the signed-in Staff Portal launcher.
+ if(returnUrl && isTrustedPortalUrl(returnUrl)) return new URL(returnUrl);
+ // Fallback for mobile/standalone tabs: the receipt QR itself contains the Staff Portal URL.
+ try{
+  const qrUrl=new URL(String(scannedText||"").trim());
+  if(isTrustedPortalUrl(qrUrl.toString()) && qrUrl.searchParams.get("page")==="staff") return qrUrl;
+ }catch(e){}
+ return null;
+}
 function returnToStaffPortal(text){
  const token=extractWorkflowToken(text);
  if(!token){
-  setStatus("QR was decoded, but it does not contain a valid CSWDO workflow token. Check that this is a CSWDO client receipt QR code.","error");
+  setStatus("QR was read, but no valid CSWDO workflow token was found. Scan the QR code printed on the CSWDO receipt.","error");
   return false;
  }
- try{
-  let destination=null;
-  // Prefer the return URL supplied by the signed-in Staff Portal.
-  if(returnUrl){
-   const candidate=new URL(returnUrl);
-   if(candidate.protocol==="https:" && /(^|\.)script\.google\.com$/i.test(candidate.hostname)){
-    destination=candidate;
-   }
+ // Desktop: send the token to the original Staff Portal tab. It will validate the session
+ // and perform the server-side record lookup. Do not send the whole QR URL as the token.
+ if(window.opener && !window.opener.closed){
+  let origin="";
+  try{
+   if(!returnOrigin) throw new Error("Missing return origin");
+   const parsedOrigin=new URL(returnOrigin);
+   if(parsedOrigin.protocol!=="https:" || !/(^|\.)script\.google\.com$/i.test(parsedOrigin.hostname)) throw new Error("Invalid return origin");
+   origin=parsedOrigin.origin;
+  }catch(e){
+   // The scanned QR can still provide the trusted destination if the launcher parameter is absent.
+   const fallback=getPortalDestination(text);
+   if(fallback) origin=fallback.origin;
   }
-  // Mobile fallback: use the Staff Portal URL embedded in the scanned QR if needed.
-  if(!destination){
-   const scannedUrl=new URL(String(text||"").trim());
-   if(scannedUrl.protocol==="https:" &&
-      /(^|\.)script\.google\.com$/i.test(scannedUrl.hostname) &&
-      scannedUrl.searchParams.get("page")==="staff"){
-    destination=scannedUrl;
-   }
+  if(origin){
+   try{window.opener.postMessage({type:"CSWDO_QR_SCANNED",value:token},origin);setStatus("QR scanned. The token was sent to the Staff Portal. Check the Staff Portal for the client record.","ok");setTimeout(()=>window.close(),700);return true;}catch(e){}
   }
-  if(!destination){
-   setStatus("The Staff Portal return address is missing or invalid. Open the scanner using SCAN CLIENT QR CODE inside the signed-in Staff Portal, then scan again.","error");
-   return false;
-  }
-  destination.searchParams.set("page","staff");
-  destination.searchParams.set("scannedQr",token);
-  destination.searchParams.delete("qr");
-  destination.searchParams.delete("token");
-  setStatus("QR code detected. Returning to the Staff Portal with the scanned token…","ok");
-  window.location.replace(destination.toString());
-  return true;
- }catch(e){
-  setStatus("Could not return to the Staff Portal. Reopen the scanner from the signed-in Staff Portal and try again.","error");
+ }
+ // Mobile: redirect back to the Staff Portal with the scanned token. The Staff Portal's
+ // scannedQr handler must read this parameter and call its authorized server-side lookup.
+ const destination=getPortalDestination(text);
+ if(!destination){
+  setStatus("The Staff Portal return address is missing or invalid. Reopen this scanner using SCAN CLIENT QR CODE in the signed-in Staff Portal, then scan again.","error");
   return false;
  }
+ destination.searchParams.set("page","staff");
+ destination.searchParams.set("scannedQr",token);
+ destination.searchParams.delete("qr");
+ destination.searchParams.delete("token");
+ setStatus("QR scanned. Returning to the Staff Portal…","ok");
+ window.location.replace(destination.toString());
+ return true;
 }
 function showResult(text){
  lastDecodedText=String(text||"").trim();
  qrTextEl.textContent=lastDecodedText||"(QR code was empty)";
  resultEl.style.display="block";
- setStatus("QR code scanned successfully.","ok");
- if(returnUrl) setTimeout(()=>returnToStaffPortal(lastDecodedText),500);
+ // Always attempt the return workflow. The QR URL is the fallback when returnUrl is absent.
+ returnToStaffPortal(lastDecodedText);
 }
 function ensureLibrary(){if(!window.Html5Qrcode){setStatus("The QR scanner library did not load. Check your internet connection, reload this page, and try again.","error");return false}return true}
 async function stopCamera(silent){if(scanner&&scannerRunning){try{await scanner.stop()}catch(err){if(!silent)console.warn(err)}}scannerRunning=false;starting=false;startButton.disabled=false;if(!silent)setStatus("Camera stopped.")}
