@@ -67,7 +67,7 @@ function returnToStaffPortal(text){
  if(window.opener && !window.opener.closed && returnOrigin){
   try{
    const originUrl=new URL(returnOrigin);
-   if(originUrl.protocol!=="https:" || originUrl.hostname!=="script.google.com") throw new Error("Invalid portal origin");
+   if(originUrl.protocol!=="https:" || !/^(script\.google\.com|script\.googleusercontent\.com)$/i.test(originUrl.hostname)) throw new Error("Invalid portal origin");
    window.opener.postMessage({type:"CSWDO_QR_SCANNED",value:String(text||"").trim()},originUrl.origin);
    setStatus("QR detected. Sending it to the signed-in Staff Portal…","ok");
    setTimeout(function(){try{window.close()}catch(e){}},350);
@@ -83,8 +83,13 @@ function returnToStaffPortal(text){
  }
  try{
   const destination=new URL(returnUrl);
-  if(destination.protocol!=="https:" || destination.hostname!=="script.google.com" || !/\/macros\/s\/.+\/exec$/.test(destination.pathname)){
-   setStatus("The Staff Portal return address is invalid. Reopen the scanner from the official Staff Portal.","error");
+  const hostAllowed=/^(script\.google\.com|script\.googleusercontent\.com)$/i.test(destination.hostname);
+  const isAppsScriptExec=/\/macros\/s\/[^/]+\/exec\/?$/i.test(destination.pathname);
+  // Accept the official deployed /exec URL; tolerate a Google Apps Script wrapper URL
+  // when the browser has opened the app through its Google-hosted frame.
+  const isGoogleScriptWrapper=/^script\.googleusercontent\.com$/i.test(destination.hostname) && destination.pathname.length>1;
+  if(destination.protocol!=="https:" || !hostAllowed || !(isAppsScriptExec || isGoogleScriptWrapper)){
+   setStatus("The Staff Portal return address is invalid. Reopen the scanner using SCAN CLIENT QR CODE from the signed-in Staff Portal.","error");
    return false;
   }
   destination.searchParams.set("page","staff");
