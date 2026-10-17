@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#193d64">
 <title>CSWDO Client QR Scanner</title>
+<!-- Fixed desktop postMessage handoff and mobile scannedQr redirect. -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 :root{--navy:#193d64;--green:#168653;--page:#eef3f8;--border:#d4deea;--text:#173b63}
@@ -55,73 +56,55 @@ function extractWorkflowToken(raw){
  if(/^[a-f0-9-]{24,128}$/i.test(value))return value;
  return "";
 }
-function isTrustedPortalUrl(value){
- try{
-  const u=new URL(value);
-  return u.protocol==="https:" && /(^|\.)script\.google\.com$/i.test(u.hostname) &&
-    /\/macros\/s\//i.test(u.pathname) && /\/exec\/?$/i.test(u.pathname);
- }catch(e){return false;}
-}
-function getPortalDestination(scannedText){
- // The returnUrl is created by the signed-in Staff Portal launcher and must retain its session.
- if(returnUrl && isTrustedPortalUrl(returnUrl)){
-  const destination=new URL(returnUrl);
-  if(destination.searchParams.get("session") || destination.searchParams.get("token")) return destination;
-  // Never redirect to a protected Staff Portal without the staff session token.
- }
- // A receipt QR alone identifies a record but does not authenticate staff. Only accept it
- // as a return destination if it already contains a session token (normally it will not).
- try{
-  const qrUrl=new URL(String(scannedText||"").trim());
-  if(isTrustedPortalUrl(qrUrl.toString()) && qrUrl.searchParams.get("page")==="staff" &&
-     (qrUrl.searchParams.get("session") || qrUrl.searchParams.get("token"))) return qrUrl;
- }catch(e){}
- return null;
-}
 function returnToStaffPortal(text){
  const token=extractWorkflowToken(text);
  if(!token){
-  setStatus("QR was read, but no valid CSWDO workflow token was found. Scan the QR code printed on the CSWDO receipt.","error");
+  setStatus("QR was decoded, but it does not contain a valid CSWDO workflow token. Check that this is a CSWDO client receipt QR code.","error");
   return false;
  }
- // Desktop: send the token only to the trusted origin of the original signed-in Staff Portal.
- if(window.opener && !window.opener.closed){
-  let origin="";
+ // DESKTOP: send the decoded QR payload back to the original signed-in Staff Portal.
+ // The portal validates the token and opens the record in its existing tab.
+ if(window.opener && !window.opener.closed && returnOrigin){
   try{
-   const portal=getPortalDestination(text);
-   const parsedOrigin=returnOrigin ? new URL(returnOrigin) : (portal ? new URL(portal.origin) : null);
-   if(!parsedOrigin || parsedOrigin.protocol!=="https:" || !/(^|\.)script\.google\.com$/i.test(parsedOrigin.hostname)) throw new Error("Invalid return origin");
-   origin=parsedOrigin.origin;
-  }catch(e){}
-  if(origin){
-   try{
-    window.opener.postMessage({type:"CSWDO_QR_SCANNED",value:token},origin);
-    setStatus("QR scanned and sent to the Staff Portal. Check the original Staff Portal window for the client record.","ok");
-    setTimeout(()=>window.close(),700);
-    return true;
-   }catch(e){}
+   const originUrl=new URL(returnOrigin);
+   if(originUrl.protocol!=="https:" || originUrl.hostname!=="script.google.com") throw new Error("Invalid portal origin");
+   window.opener.postMessage({type:"CSWDO_QR_SCANNED",value:String(text||"").trim()},originUrl.origin);
+   setStatus("QR detected. Sending it to the signed-in Staff Portal…","ok");
+   setTimeout(function(){try{window.close()}catch(e){}},350);
+   return true;
+  }catch(e){
+   // Continue to the mobile-style return URL below if opener messaging is unavailable.
   }
  }
- // Mobile / popup-blocker fallback: return only to a trusted URL carrying the signed-in session.
- const destination=getPortalDestination(text);
- if(!destination){
-  setStatus("The Staff Portal return address is missing its valid sign-in session. Return to the signed-in Staff Portal, tap SCAN CLIENT QR CODE, and scan again. Do not open the scanner directly.","error");
+ // MOBILE / popup-blocker fallback: navigate back to the original signed-in portal.
+ if(!returnUrl){
+  setStatus("QR code read, but no return address was supplied. Reopen the scanner using SCAN CLIENT QR CODE in the signed-in Staff Portal.","error");
   return false;
  }
- destination.searchParams.set("page","staff");
- destination.searchParams.set("scannedQr",token);
- destination.searchParams.delete("qr");
- destination.searchParams.delete("token");
- setStatus("QR scanned. Returning to the signed-in Staff Portal…","ok");
- window.location.replace(destination.toString());
- return true;
+ try{
+  const destination=new URL(returnUrl);
+  if(destination.protocol!=="https:" || destination.hostname!=="script.google.com" || !/\/macros\/s\/.+\/exec$/.test(destination.pathname)){
+   setStatus("The Staff Portal return address is invalid. Reopen the scanner from the official Staff Portal.","error");
+   return false;
+  }
+  destination.searchParams.set("page","staff");
+  destination.searchParams.set("scannedQr",token);
+  destination.searchParams.delete("qr");
+  destination.searchParams.delete("token");
+  setStatus("QR detected. Returning to the signed-in Staff Portal and opening the client record…","ok");
+  window.location.replace(destination.toString());
+  return true;
+ }catch(e){
+  setStatus("Could not return to the Staff Portal. Reopen the scanner from Chrome and try again.","error");
+  return false;
+ }
 }
 function showResult(text){
  lastDecodedText=String(text||"").trim();
  qrTextEl.textContent=lastDecodedText||"(QR code was empty)";
  resultEl.style.display="block";
- // Always attempt the return workflow. The QR URL is the fallback when returnUrl is absent.
- returnToStaffPortal(lastDecodedText);
+ setStatus("QR code scanned successfully.","ok");
+ if(returnUrl) setTimeout(()=>returnToStaffPortal(lastDecodedText),500);
 }
 function ensureLibrary(){if(!window.Html5Qrcode){setStatus("The QR scanner library did not load. Check your internet connection, reload this page, and try again.","error");return false}return true}
 async function stopCamera(silent){if(scanner&&scannerRunning){try{await scanner.stop()}catch(err){if(!silent)console.warn(err)}}scannerRunning=false;starting=false;startButton.disabled=false;if(!silent)setStatus("Camera stopped.")}
