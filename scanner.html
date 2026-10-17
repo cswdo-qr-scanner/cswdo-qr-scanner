@@ -61,25 +61,37 @@ function returnToStaffPortal(text){
   setStatus("QR was decoded, but it does not contain a valid CSWDO workflow token. Check that this is a CSWDO client receipt QR code.","error");
   return false;
  }
- if(!returnUrl){
-  setStatus("QR code read. Reopen the scanner using the SCAN CLIENT QR CODE button in the Staff Portal so it can return to your signed-in session.","error");
-  return false;
- }
  try{
-  const destination=new URL(returnUrl);
-  if(destination.protocol!=="https:" || !/(^|\.)script\.google\.com$/i.test(destination.hostname)){
-   setStatus("The Staff Portal return address is invalid. Reopen the scanner from the official Staff Portal.","error");
+  let destination=null;
+  // Prefer the return URL supplied by the signed-in Staff Portal.
+  if(returnUrl){
+   const candidate=new URL(returnUrl);
+   if(candidate.protocol==="https:" && /(^|\.)script\.google\.com$/i.test(candidate.hostname)){
+    destination=candidate;
+   }
+  }
+  // Mobile fallback: use the Staff Portal URL embedded in the scanned QR if needed.
+  if(!destination){
+   const scannedUrl=new URL(String(text||"").trim());
+   if(scannedUrl.protocol==="https:" &&
+      /(^|\.)script\.google\.com$/i.test(scannedUrl.hostname) &&
+      scannedUrl.searchParams.get("page")==="staff"){
+    destination=scannedUrl;
+   }
+  }
+  if(!destination){
+   setStatus("The Staff Portal return address is missing or invalid. Open the scanner using SCAN CLIENT QR CODE inside the signed-in Staff Portal, then scan again.","error");
    return false;
   }
   destination.searchParams.set("page","staff");
   destination.searchParams.set("scannedQr",token);
   destination.searchParams.delete("qr");
   destination.searchParams.delete("token");
-  setStatus("QR code detected. Returning to the Staff Portal and opening the client record…","ok");
+  setStatus("QR code detected. Returning to the Staff Portal with the scanned token…","ok");
   window.location.replace(destination.toString());
   return true;
  }catch(e){
-  setStatus("Could not return to the Staff Portal. Reopen the scanner from Chrome and try again.","error");
+  setStatus("Could not return to the Staff Portal. Reopen the scanner from the signed-in Staff Portal and try again.","error");
   return false;
  }
 }
