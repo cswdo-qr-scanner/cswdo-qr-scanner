@@ -63,12 +63,18 @@ function isTrustedPortalUrl(value){
  }catch(e){return false;}
 }
 function getPortalDestination(scannedText){
- // Prefer the return URL supplied by the signed-in Staff Portal launcher.
- if(returnUrl && isTrustedPortalUrl(returnUrl)) return new URL(returnUrl);
- // Fallback for mobile/standalone tabs: the receipt QR itself contains the Staff Portal URL.
+ // The returnUrl is created by the signed-in Staff Portal launcher and must retain its session.
+ if(returnUrl && isTrustedPortalUrl(returnUrl)){
+  const destination=new URL(returnUrl);
+  if(destination.searchParams.get("session") || destination.searchParams.get("token")) return destination;
+  // Never redirect to a protected Staff Portal without the staff session token.
+ }
+ // A receipt QR alone identifies a record but does not authenticate staff. Only accept it
+ // as a return destination if it already contains a session token (normally it will not).
  try{
   const qrUrl=new URL(String(scannedText||"").trim());
-  if(isTrustedPortalUrl(qrUrl.toString()) && qrUrl.searchParams.get("page")==="staff") return qrUrl;
+  if(isTrustedPortalUrl(qrUrl.toString()) && qrUrl.searchParams.get("page")==="staff" &&
+     (qrUrl.searchParams.get("session") || qrUrl.searchParams.get("token"))) return qrUrl;
  }catch(e){}
  return null;
 }
@@ -78,36 +84,35 @@ function returnToStaffPortal(text){
   setStatus("QR was read, but no valid CSWDO workflow token was found. Scan the QR code printed on the CSWDO receipt.","error");
   return false;
  }
- // Desktop: send the token to the original Staff Portal tab. It will validate the session
- // and perform the server-side record lookup. Do not send the whole QR URL as the token.
+ // Desktop: send the token only to the trusted origin of the original signed-in Staff Portal.
  if(window.opener && !window.opener.closed){
   let origin="";
   try{
-   if(!returnOrigin) throw new Error("Missing return origin");
-   const parsedOrigin=new URL(returnOrigin);
-   if(parsedOrigin.protocol!=="https:" || !/(^|\.)script\.google\.com$/i.test(parsedOrigin.hostname)) throw new Error("Invalid return origin");
+   const portal=getPortalDestination(text);
+   const parsedOrigin=returnOrigin ? new URL(returnOrigin) : (portal ? new URL(portal.origin) : null);
+   if(!parsedOrigin || parsedOrigin.protocol!=="https:" || !/(^|\.)script\.google\.com$/i.test(parsedOrigin.hostname)) throw new Error("Invalid return origin");
    origin=parsedOrigin.origin;
-  }catch(e){
-   // The scanned QR can still provide the trusted destination if the launcher parameter is absent.
-   const fallback=getPortalDestination(text);
-   if(fallback) origin=fallback.origin;
-  }
+  }catch(e){}
   if(origin){
-   try{window.opener.postMessage({type:"CSWDO_QR_SCANNED",value:token},origin);setStatus("QR scanned. The token was sent to the Staff Portal. Check the Staff Portal for the client record.","ok");setTimeout(()=>window.close(),700);return true;}catch(e){}
+   try{
+    window.opener.postMessage({type:"CSWDO_QR_SCANNED",value:token},origin);
+    setStatus("QR scanned and sent to the Staff Portal. Check the original Staff Portal window for the client record.","ok");
+    setTimeout(()=>window.close(),700);
+    return true;
+   }catch(e){}
   }
  }
- // Mobile: redirect back to the Staff Portal with the scanned token. The Staff Portal's
- // scannedQr handler must read this parameter and call its authorized server-side lookup.
+ // Mobile / popup-blocker fallback: return only to a trusted URL carrying the signed-in session.
  const destination=getPortalDestination(text);
  if(!destination){
-  setStatus("The Staff Portal return address is missing or invalid. Reopen this scanner using SCAN CLIENT QR CODE in the signed-in Staff Portal, then scan again.","error");
+  setStatus("The Staff Portal return address is missing its valid sign-in session. Return to the signed-in Staff Portal, tap SCAN CLIENT QR CODE, and scan again. Do not open the scanner directly.","error");
   return false;
  }
  destination.searchParams.set("page","staff");
  destination.searchParams.set("scannedQr",token);
  destination.searchParams.delete("qr");
  destination.searchParams.delete("token");
- setStatus("QR scanned. Returning to the Staff Portal…","ok");
+ setStatus("QR scanned. Returning to the signed-in Staff Portal…","ok");
  window.location.replace(destination.toString());
  return true;
 }
